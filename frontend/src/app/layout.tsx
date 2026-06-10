@@ -18,16 +18,12 @@ export default function RootLayout({
       <body className="bg-[#f5f5f7] min-h-screen">
         <div className="flex h-screen overflow-hidden">
           <Sidebar />
-          <main className="flex-1 overflow-y-auto">
+          {/* pt-16 en móvil para no tapar el botón hamburguesa */}
+          <main className="flex-1 overflow-y-auto pt-16 md:pt-0">
             {children}
           </main>
         </div>
-        <Toaster
-          position="top-right"
-          richColors
-          expand={false}
-          duration={4000}
-        />
+        <Toaster position="top-right" richColors expand={false} duration={4000} />
       </body>
     </html>
   );

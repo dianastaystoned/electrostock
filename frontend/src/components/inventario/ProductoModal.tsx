@@ -19,7 +19,7 @@ interface Props {
   onSaved: () => void;
 }
 
-const CATEGORIAS = ["Smartphones", "Laptops", "Tablets", "Audio", "Wearables", "Televisores", "Gaming", "Accesorios", "Fotografía", "Otro"];
+const CATEGORIAS = ["Smartphones", "Tablets", "Audio", "Cables", "Adaptador", "Cargador", "Gaming", "Accesorios", "Fotografía", "Otro"];
 
 export function ProductoModal({ open, onClose, producto, onSaved }: Props) {
   const {

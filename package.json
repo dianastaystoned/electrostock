@@ -1,0 +1,20 @@
+{
+  "name": "electrostock",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "install:all": "npm install --prefix backend && npm install --prefix frontend",
+    "dev": "concurrently -n \"API,WEB\" -c \"blue,green\" \"npm run dev --prefix backend\" \"npm run dev --prefix frontend\"",
+    "db:setup": "cd backend && npx prisma generate --schema=../database/schema.prisma && npx prisma db push --schema=../database/schema.prisma && npx tsx ../database/seed.ts",
+    "db:seed": "cd backend && npx tsx ../database/seed.ts",
+    "db:studio": "cd backend && npx prisma studio --schema=../database/schema.prisma",
+    "setup": "npm run install:all && npm run db:setup"
+  },
+  "devDependencies": {
+    "concurrently": "^8.2.2",
+    "prisma": "^5.22.0"
+  },
+  "dependencies": {
+    "@prisma/client": "^5.22.0"
+  }
+}

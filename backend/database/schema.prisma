@@ -1,0 +1,83 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+model Producto {
+  id               Int              @id @default(autoincrement())
+  nombre           String           @db.VarChar(200)
+  descripcion      String?          @db.Text
+  sku              String           @unique @db.VarChar(100)
+  categoria        String           @db.VarChar(100)
+  marca            String           @db.VarChar(100)
+  modelo           String?          @db.VarChar(100)
+  precioCompra     Decimal          @db.Decimal(10, 2)
+  precioVenta      Decimal          @db.Decimal(10, 2)
+  stock            Int              @default(0)
+  stockMinimo      Int              @default(5)
+  imagen           String?          @db.VarChar(500)
+  activo           Boolean          @default(true)
+  createdAt        DateTime         @default(now())
+  updatedAt        DateTime         @updatedAt
+  detallesVenta    DetalleVenta[]
+
+  @@map("productos")
+}
+
+model Venta {
+  id              Int            @id @default(autoincrement())
+  folio           String         @unique @db.VarChar(50)
+  clienteNombre   String?        @db.VarChar(200)
+  clienteEmail    String?        @db.VarChar(200)
+  clienteTelefono String?        @db.VarChar(20)
+  subtotal        Decimal        @db.Decimal(10, 2)
+  descuento       Decimal        @default(0) @db.Decimal(10, 2)
+  total           Decimal        @db.Decimal(10, 2)
+  metodoPago      String         @db.VarChar(50)
+  estado          EstadoVenta    @default(COMPLETADA)
+  notas           String?        @db.Text
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+  detalles        DetalleVenta[]
+
+  @@map("ventas")
+}
+
+model DetalleVenta {
+  id          Int      @id @default(autoincrement())
+  ventaId     Int
+  productoId  Int
+  cantidad    Int
+  precioUnit  Decimal  @db.Decimal(10, 2)
+  subtotal    Decimal  @db.Decimal(10, 2)
+  createdAt   DateTime @default(now())
+  venta       Venta    @relation(fields: [ventaId], references: [id], onDelete: Cascade)
+  producto    Producto @relation(fields: [productoId], references: [id])
+
+  @@map("detalles_venta")
+}
+
+model Gasto {
+  id          Int          @id @default(autoincrement())
+  concepto    String       @db.VarChar(200)
+  descripcion String?      @db.Text
+  categoria   String       @db.VarChar(100)
+  monto       Decimal      @db.Decimal(10, 2)
+  fecha       DateTime
+  proveedor   String?      @db.VarChar(200)
+  comprobante String?      @db.VarChar(500)
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+
+  @@map("gastos")
+}
+
+enum EstadoVenta {
+  COMPLETADA
+  CANCELADA
+  PENDIENTE
+}

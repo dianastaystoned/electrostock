@@ -8,9 +8,7 @@ const generarFolio = async (): Promise<string> => {
   const mes = String(ahora.getMonth() + 1).padStart(2, "0");
 
   const ultimaVenta = await prisma.venta.findFirst({
-    where: {
-      folio: { startsWith: `VNT-${año}${mes}` },
-    },
+    where: { folio: { startsWith: `VNT-${año}${mes}` } },
     orderBy: { id: "desc" },
   });
 
@@ -23,26 +21,12 @@ const generarFolio = async (): Promise<string> => {
   return `VNT-${año}${mes}-${String(siguiente).padStart(4, "0")}`;
 };
 
-export const getVentas = async (
-  req: Request,
-  res: Response,
-  next: NextFunction
-) => {
+export const getVentas = async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const {
-      search,
-      estado,
-      metodoPago,
-      fechaDesde,
-      fechaHasta,
-      page = "1",
-      limit = "20",
-    } = req.query;
-
+    const { search, estado, metodoPago, fechaDesde, fechaHasta, page = "1", limit = "20" } = req.query;
     const pageNum = parseInt(page as string);
     const limitNum = parseInt(limit as string);
     const skip = (pageNum - 1) * limitNum;
-
     const where: any = {};
 
     if (search) {
@@ -66,17 +50,11 @@ export const getVentas = async (
 
     const [ventas, total] = await Promise.all([
       prisma.venta.findMany({
-        where,
-        skip,
-        take: limitNum,
+        where, skip, take: limitNum,
         orderBy: { createdAt: "desc" },
         include: {
           detalles: {
-            include: {
-              producto: {
-                select: { nombre: true, sku: true, imagen: true },
-              },
-            },
+            include: { producto: { select: { nombre: true, sku: true, imagen: true } } },
           },
         },
       }),
@@ -84,269 +62,142 @@ export const getVentas = async (
     ]);
 
     res.json({
-      success: true,
-      data: ventas,
-      pagination: {
-        total,
-        page: pageNum,
-        limit: limitNum,
-        totalPages: Math.ceil(total / limitNum),
-      },
+      success: true, data: ventas,
+      pagination: { total, page: pageNum, limit: limitNum, totalPages: Math.ceil(total / limitNum) },
     });
-  } catch (error) {
-    next(error);
-  }
+  } catch (error) { next(error); }
 };
 
-export const getVentaById = async (
-  req: Request,
-  res: Response,
-  next: NextFunction
-) => {
+export const getVentaById = async (req: Request, res: Response, next: NextFunction) => {
   try {
     const { id } = req.params;
     const venta = await prisma.venta.findUnique({
       where: { id: parseInt(id) },
-      include: {
-        detalles: {
-          include: {
-            producto: true,
-          },
-        },
-      },
+      include: { detalles: { include: { producto: true } } },
     });
-
     if (!venta) throw createError("Venta no encontrada", 404);
-
     res.json({ success: true, data: venta });
-  } catch (error) {
-    next(error);
-  }
+  } catch (error) { next(error); }
 };
 
-export const crearVenta = async (
-  req: Request,
-  res: Response,
-  next: NextFunction
-) => {
+export const crearVenta = async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const {
-      clienteNombre,
-      clienteEmail,
-      clienteTelefono,
-      metodoPago,
-      descuento = 0,
-      notas,
-      items,
-    } = req.body;
+    const { clienteNombre, clienteEmail, clienteTelefono, metodoPago, descuento = 0, notas, items } = req.body;
 
     if (!items || !Array.isArray(items) || items.length === 0) {
       throw createError("La venta debe tener al menos un producto", 400);
     }
 
-    // Verificar stock de todos los productos
     const erroresStock: string[] = [];
     const productosVenta = await Promise.all(
       items.map(async (item: { productoId: number; cantidad: number }) => {
-        const producto = await prisma.producto.findUnique({
-          where: { id: item.productoId },
-        });
-
-        if (!producto) {
-          erroresStock.push(`Producto ID ${item.productoId} no encontrado`);
-          return null;
-        }
-
-        if (!producto.activo) {
-          erroresStock.push(`Producto "${producto.nombre}" está inactivo`);
-          return null;
-        }
-
+        const producto = await prisma.producto.findUnique({ where: { id: item.productoId } });
+        if (!producto) { erroresStock.push(`Producto ID ${item.productoId} no encontrado`); return null; }
+        if (!producto.activo) { erroresStock.push(`Producto "${producto.nombre}" está inactivo`); return null; }
         if (producto.stock < item.cantidad) {
-          erroresStock.push(
-            `Stock insuficiente para "${producto.nombre}": disponible ${producto.stock}, solicitado ${item.cantidad}`
-          );
+          erroresStock.push(`Stock insuficiente para "${producto.nombre}": disponible ${producto.stock}, solicitado ${item.cantidad}`);
           return null;
         }
-
         return { producto, cantidad: item.cantidad };
       })
     );
 
-    if (erroresStock.length > 0) {
-      throw createError(erroresStock.join("; "), 400);
-    }
+    if (erroresStock.length > 0) throw createError(erroresStock.join("; "), 400);
 
-    // Calcular totales
     let subtotal = 0;
-    const detallesData = productosVenta
-      .filter((p) => p !== null)
-      .map((p) => {
-        const itemSubtotal = Number(p!.producto.precioVenta) * p!.cantidad;
-        subtotal += itemSubtotal;
-        return {
-          productoId: p!.producto.id,
-          cantidad: p!.cantidad,
-          precioUnit: Number(p!.producto.precioVenta),
-          subtotal: itemSubtotal,
-        };
-      });
+    const detallesData = productosVenta.filter((p) => p !== null).map((p) => {
+      const itemSubtotal = Number(p!.producto.precioVenta) * p!.cantidad;
+      subtotal += itemSubtotal;
+      return { productoId: p!.producto.id, cantidad: p!.cantidad, precioUnit: Number(p!.producto.precioVenta), subtotal: itemSubtotal };
+    });
 
     const descuentoNum = parseFloat(String(descuento));
     const total = subtotal - descuentoNum;
-
     if (total < 0) throw createError("El descuento no puede ser mayor al subtotal", 400);
 
     const folio = await generarFolio();
 
-    // Crear venta y actualizar stock en transacción
-    const venta = await prisma.$transaction(async (tx) => {
+    const venta = await prisma.$transaction(async (tx: any) => {
       const nuevaVenta = await tx.venta.create({
         data: {
-          folio,
-          clienteNombre: clienteNombre || null,
-          clienteEmail: clienteEmail || null,
-          clienteTelefono: clienteTelefono || null,
-          subtotal,
-          descuento: descuentoNum,
-          total,
-          metodoPago,
-          notas: notas || null,
-          detalles: {
-            create: detallesData,
-          },
+          folio, clienteNombre: clienteNombre || null, clienteEmail: clienteEmail || null,
+          clienteTelefono: clienteTelefono || null, subtotal, descuento: descuentoNum, total,
+          metodoPago, notas: notas || null,
+          detalles: { create: detallesData },
         },
-        include: {
-          detalles: {
-            include: { producto: true },
-          },
-        },
+        include: { detalles: { include: { producto: true } } },
       });
-
-      // Actualizar stock
       for (const detalle of detallesData) {
-        await tx.producto.update({
-          where: { id: detalle.productoId },
-          data: { stock: { decrement: detalle.cantidad } },
-        });
+        await tx.producto.update({ where: { id: detalle.productoId }, data: { stock: { decrement: detalle.cantidad } } });
       }
-
       return nuevaVenta;
     });
 
-    res.status(201).json({
-      success: true,
-      data: venta,
-      message: `Venta ${folio} registrada exitosamente`,
-    });
-  } catch (error) {
-    next(error);
-  }
+    res.status(201).json({ success: true, data: venta, message: `Venta ${folio} registrada exitosamente` });
+  } catch (error) { next(error); }
 };
 
-export const cancelarVenta = async (
-  req: Request,
-  res: Response,
-  next: NextFunction
-) => {
+export const cancelarVenta = async (req: Request, res: Response, next: NextFunction) => {
   try {
     const { id } = req.params;
     const { motivo } = req.body;
-
-    const venta = await prisma.venta.findUnique({
-      where: { id: parseInt(id) },
-      include: { detalles: true },
-    });
-
+    const venta = await prisma.venta.findUnique({ where: { id: parseInt(id) }, include: { detalles: true } });
     if (!venta) throw createError("Venta no encontrada", 404);
-    if (venta.estado === "CANCELADA") {
-      throw createError("Esta venta ya está cancelada", 400);
-    }
+    if (venta.estado === "CANCELADA") throw createError("Esta venta ya está cancelada", 400);
 
-    // Cancelar venta y restaurar stock
-    await prisma.$transaction(async (tx) => {
+    await prisma.$transaction(async (tx: any) => {
       await tx.venta.update({
         where: { id: parseInt(id) },
-        data: {
-          estado: "CANCELADA",
-          notas: motivo
-            ? `${venta.notas || ""}\nMotivo de cancelación: ${motivo}`
-            : venta.notas,
-        },
+        data: { estado: "CANCELADA", notas: motivo ? `${venta.notas || ""}\nMotivo de cancelación: ${motivo}` : venta.notas },
       });
-
-      // Restaurar stock solo si estaba completada
       if (venta.estado === "COMPLETADA") {
         for (const detalle of venta.detalles) {
-          await tx.producto.update({
-            where: { id: detalle.productoId },
-            data: { stock: { increment: detalle.cantidad } },
-          });
+          await tx.producto.update({ where: { id: detalle.productoId }, data: { stock: { increment: detalle.cantidad } } });
         }
       }
     });
 
     res.json({ success: true, message: "Venta cancelada. Stock restaurado." });
-  } catch (error) {
-    next(error);
-  }
+  } catch (error) { next(error); }
 };
 
-export const getEstadisticas = async (
-  _req: Request,
-  res: Response,
-  next: NextFunction
-) => {
+// ── NUEVO: eliminar venta ──────────────────────────────
+export const eliminarVenta = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { id } = req.params;
+    const venta = await prisma.venta.findUnique({ where: { id: parseInt(id) }, include: { detalles: true } });
+    if (!venta) throw createError("Venta no encontrada", 404);
+
+    await prisma.$transaction(async (tx: any) => {
+      // Si estaba completada, restaurar stock antes de borrar
+      if (venta.estado === "COMPLETADA") {
+        for (const detalle of venta.detalles) {
+          await tx.producto.update({ where: { id: detalle.productoId }, data: { stock: { increment: detalle.cantidad } } });
+        }
+      }
+      await tx.detalleVenta.deleteMany({ where: { ventaId: parseInt(id) } });
+      await tx.venta.delete({ where: { id: parseInt(id) } });
+    });
+
+    res.json({ success: true, message: "Venta eliminada correctamente" });
+  } catch (error) { next(error); }
+};
+
+export const getEstadisticas = async (_req: Request, res: Response, next: NextFunction) => {
   try {
     const hoy = new Date();
     const inicioHoy = new Date(hoy.getFullYear(), hoy.getMonth(), hoy.getDate());
-
     const [ventasHoy, ventasSemana, ventasMes] = await Promise.all([
-      prisma.venta.aggregate({
-        _sum: { total: true },
-        _count: { id: true },
-        where: { estado: "COMPLETADA", createdAt: { gte: inicioHoy } },
-      }),
-      prisma.venta.aggregate({
-        _sum: { total: true },
-        _count: { id: true },
-        where: {
-          estado: "COMPLETADA",
-          createdAt: {
-            gte: new Date(hoy.getTime() - 7 * 24 * 60 * 60 * 1000),
-          },
-        },
-      }),
-      prisma.venta.aggregate({
-        _sum: { total: true },
-        _count: { id: true },
-        where: {
-          estado: "COMPLETADA",
-          createdAt: {
-            gte: new Date(hoy.getFullYear(), hoy.getMonth(), 1),
-          },
-        },
-      }),
+      prisma.venta.aggregate({ _sum: { total: true }, _count: { id: true }, where: { estado: "COMPLETADA", createdAt: { gte: inicioHoy } } }),
+      prisma.venta.aggregate({ _sum: { total: true }, _count: { id: true }, where: { estado: "COMPLETADA", createdAt: { gte: new Date(hoy.getTime() - 7 * 24 * 60 * 60 * 1000) } } }),
+      prisma.venta.aggregate({ _sum: { total: true }, _count: { id: true }, where: { estado: "COMPLETADA", createdAt: { gte: new Date(hoy.getFullYear(), hoy.getMonth(), 1) } } }),
     ]);
-
     res.json({
-      success: true,
-      data: {
-        hoy: {
-          total: Number(ventasHoy._sum.total || 0),
-          pedidos: ventasHoy._count.id,
-        },
-        semana: {
-          total: Number(ventasSemana._sum.total || 0),
-          pedidos: ventasSemana._count.id,
-        },
-        mes: {
-          total: Number(ventasMes._sum.total || 0),
-          pedidos: ventasMes._count.id,
-        },
+      success: true, data: {
+        hoy: { total: Number(ventasHoy._sum.total || 0), pedidos: ventasHoy._count.id },
+        semana: { total: Number(ventasSemana._sum.total || 0), pedidos: ventasSemana._count.id },
+        mes: { total: Number(ventasMes._sum.total || 0), pedidos: ventasMes._count.id },
       },
     });
-  } catch (error) {
-    next(error);
-  }
+  } catch (error) { next(error); }
 };

@@ -1,18 +1,14 @@
 "use client";
 import { useEffect, useState, useCallback } from "react";
 import { motion } from "framer-motion";
-import {
-  Plus, Search, ShoppingCart, Download, RefreshCw, X,
-} from "lucide-react";
+import { Plus, Search, ShoppingCart, Download, RefreshCw, X, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Card, CardContent } from "@/components/ui/card";
-import {
-  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
-} from "@/components/ui/select";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { NuevaVentaModal } from "@/components/ventas/NuevaVentaModal";
 import { ventasApi, reportesApi, descargarArchivo } from "@/lib/api";
 import { formatCurrency, formatDatetime } from "@/lib/utils";
@@ -71,6 +67,18 @@ export default function VentasPage() {
     }
   };
 
+  const handleEliminar = async (venta: Venta) => {
+    if (!confirm(`¿Eliminar permanentemente la venta ${venta.folio}? Esta acción no se puede deshacer.`)) return;
+    try {
+      await ventasApi.eliminar(venta.id);
+      toast.success("Venta eliminada correctamente");
+      if (ventaDetalle?.id === venta.id) setVentaDetalle(null);
+      fetchVentas(pagination.page);
+    } catch (e: any) {
+      toast.error(e.message);
+    }
+  };
+
   const handleExport = async () => {
     setExportando(true);
     try {
@@ -107,12 +115,7 @@ export default function VentasPage() {
       <div className="flex flex-col sm:flex-row gap-3 mb-5">
         <div className="relative flex-1">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-          <Input
-            placeholder="Buscar por folio, cliente..."
-            className="pl-9"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-          />
+          <Input placeholder="Buscar por folio, cliente..." className="pl-9" value={search} onChange={(e) => setSearch(e.target.value)} />
         </div>
         <Select value={estado} onValueChange={setEstado}>
           <SelectTrigger className="w-full sm:w-44">
@@ -176,18 +179,12 @@ export default function VentasPage() {
                           <td className="px-4 py-3 hidden md:table-cell">
                             <div className="text-xs text-muted-foreground">
                               {v.detalles.slice(0, 2).map((d, i) => (
-                                <p key={i} className="truncate max-w-[160px]">
-                                  {d.cantidad}x {d.producto.nombre}
-                                </p>
+                                <p key={i} className="truncate max-w-[160px]">{d.cantidad}x {d.producto.nombre}</p>
                               ))}
-                              {v.detalles.length > 2 && (
-                                <p className="text-primary">+{v.detalles.length - 2} más</p>
-                              )}
+                              {v.detalles.length > 2 && <p className="text-primary">+{v.detalles.length - 2} más</p>}
                             </div>
                           </td>
-                          <td className="px-4 py-3 hidden lg:table-cell text-sm">
-                            {METODO_MAP[v.metodoPago] || v.metodoPago}
-                          </td>
+                          <td className="px-4 py-3 hidden lg:table-cell text-sm">{METODO_MAP[v.metodoPago] || v.metodoPago}</td>
                           <td className="px-4 py-3 text-right font-semibold">
                             {formatCurrency(Number(v.total))}
                             {Number(v.descuento) > 0 && (
@@ -201,18 +198,17 @@ export default function VentasPage() {
                             {formatDatetime(v.createdAt)}
                           </td>
                           <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
-                            <div className="flex items-center justify-center">
+                            <div className="flex items-center justify-center gap-1">
                               {v.estado === "COMPLETADA" && (
-                                <Button
-                                  variant="ghost"
-                                  size="icon-sm"
-                                  onClick={() => handleCancelar(v)}
-                                  className="hover:text-red-500 hover:bg-red-50"
-                                  title="Cancelar venta"
-                                >
+                                <Button variant="ghost" size="icon-sm" onClick={() => handleCancelar(v)}
+                                  className="hover:text-amber-500 hover:bg-amber-50" title="Cancelar venta">
                                   <X className="w-3.5 h-3.5" />
                                 </Button>
                               )}
+                              <Button variant="ghost" size="icon-sm" onClick={() => handleEliminar(v)}
+                                className="hover:text-red-500 hover:bg-red-50" title="Eliminar venta">
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </Button>
                             </div>
                           </td>
                         </motion.tr>
@@ -225,28 +221,23 @@ export default function VentasPage() {
               <div className="flex flex-col items-center justify-center py-16 text-muted-foreground">
                 <ShoppingCart className="w-12 h-12 mb-3 opacity-30" />
                 <p className="font-medium">No se encontraron ventas</p>
-                <p className="text-sm mt-1">Registra tu primera venta con el botón "Nueva venta".</p>
               </div>
             )}
           </div>
 
           {pagination.totalPages > 1 && (
             <div className="flex items-center justify-between px-5 py-3 border-t border-border/50">
-              <p className="text-xs text-muted-foreground">
-                Mostrando {ventas.length} de {pagination.total}
-              </p>
+              <p className="text-xs text-muted-foreground">Mostrando {ventas.length} de {pagination.total}</p>
               <div className="flex gap-2">
-                <Button variant="outline" size="sm" disabled={pagination.page <= 1}
-                  onClick={() => fetchVentas(pagination.page - 1)}>Anterior</Button>
-                <Button variant="outline" size="sm" disabled={pagination.page >= pagination.totalPages}
-                  onClick={() => fetchVentas(pagination.page + 1)}>Siguiente</Button>
+                <Button variant="outline" size="sm" disabled={pagination.page <= 1} onClick={() => fetchVentas(pagination.page - 1)}>Anterior</Button>
+                <Button variant="outline" size="sm" disabled={pagination.page >= pagination.totalPages} onClick={() => fetchVentas(pagination.page + 1)}>Siguiente</Button>
               </div>
             </div>
           )}
         </CardContent>
       </Card>
 
-      {/* Detalle venta drawer-like */}
+      {/* Detalle venta */}
       {ventaDetalle && (
         <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4 bg-black/30 backdrop-blur-sm"
           onClick={() => setVentaDetalle(null)}>
@@ -297,8 +288,11 @@ export default function VentasPage() {
                 <p className="text-xs text-muted-foreground">{METODO_MAP[ventaDetalle.metodoPago] || ventaDetalle.metodoPago}</p>
               </div>
             </div>
-            <div className="px-5 pb-4">
-              <Button variant="outline" className="w-full" onClick={() => setVentaDetalle(null)}>Cerrar</Button>
+            <div className="px-5 pb-4 flex gap-2">
+              <Button variant="outline" className="flex-1" onClick={() => setVentaDetalle(null)}>Cerrar</Button>
+              <Button variant="destructive" size="sm" onClick={() => handleEliminar(ventaDetalle)}>
+                <Trash2 className="w-3.5 h-3.5 mr-1.5" />Eliminar
+              </Button>
             </div>
           </motion.div>
         </div>
